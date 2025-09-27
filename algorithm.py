@@ -4,6 +4,7 @@ import matplotlib.pyplot as plt
 from collections import deque
 import heapq
 import time
+import cv2
 
 # ---------------- Helper Functions ----------------
 moves = [(0,1),(0,-1),(1,0),(-1,0)]
@@ -90,15 +91,13 @@ def astar_with_steps(maze, start, goal):
     yield visited, None
 
 # ---------------- Streamlit App ----------------
-st.title("🌐 Dynamic Search Algorithm Visualizer")
+st.title("🌐 Maze Solver & Search Algorithm Visualizer")
 
 # ---------------- Sidebar ----------------
 st.sidebar.header("Maze Settings")
+maze_option = st.sidebar.radio("Maze Input Method", ["Upload CSV", "Upload Image", "Random Maze"])
 
-# Maze input option
-maze_option = st.sidebar.radio("Maze Input Method", ["Upload CSV", "Random Maze"])
-
-maze = None  # initialize
+maze = None
 
 if maze_option == "Upload CSV":
     uploaded_file = st.sidebar.file_uploader("Upload Maze CSV (0=free,1=wall)")
@@ -106,7 +105,18 @@ if maze_option == "Upload CSV":
         maze = np.loadtxt(uploaded_file, delimiter=",", dtype=int)
     else:
         st.warning("Please upload a CSV file to continue.")
-        st.stop()  # stop the app until file is uploaded
+        st.stop()
+
+elif maze_option == "Upload Image":
+    uploaded_img = st.sidebar.file_uploader("Upload Maze Image (black=wall, white=path)", type=["png","jpg","jpeg"])
+    if uploaded_img is not None:
+        file_bytes = np.asarray(bytearray(uploaded_img.read()), dtype=np.uint8)
+        img = cv2.imdecode(file_bytes, cv2.IMREAD_GRAYSCALE)
+        _, binary = cv2.threshold(img, 127, 1, cv2.THRESH_BINARY)
+        maze = 1 - binary  # invert (0=free,1=wall)
+    else:
+        st.warning("Please upload an image to continue.")
+        st.stop()
 else:
     rows = st.sidebar.slider("Rows", 5, 50, 10)
     cols = st.sidebar.slider("Cols", 5, 50, 10)
@@ -114,12 +124,11 @@ else:
     np.random.seed(42)
     maze = np.random.choice([0,1], size=(rows, cols), p=[1-density/100, density/100])
 
-# Now maze is guaranteed to exist
+# Now maze exists
 maze_rows, maze_cols = maze.shape
 st.write(f"Maze Size: {maze_rows} x {maze_cols}")
 
-
-# Select start and goal dynamically
+# Select start and goal
 start_row = st.number_input("Start Row", 0, maze_rows-1, 0)
 start_col = st.number_input("Start Col", 0, maze_cols-1, 0)
 goal_row = st.number_input("Goal Row", 0, maze_rows-1, maze_rows-1)
@@ -133,7 +142,7 @@ maze[goal] = 0
 algo = st.sidebar.selectbox("Choose Algorithm", ["BFS", "DFS", "UCS", "A*"])
 speed = st.sidebar.slider("Animation Speed (sec)", 0.01, 1.0, 0.1)
 
-# Run search animation
+# Run search
 if st.button("Run Search"):
     if algo=="BFS":
         search = bfs_with_steps(maze, start, goal)
@@ -148,14 +157,14 @@ if st.button("Run Search"):
     final_path = None
 
     for step, (visited, path) in enumerate(search):
-        if step % max(1, maze_rows*maze_cols//500) == 0:  # speed optimization for large maze
+        if step % max(1, maze_rows*maze_cols//500) == 0:
             fig, ax = plt.subplots(figsize=(6,6))
             ax.imshow(maze, cmap="gray_r")
 
-            # Draw visited nodes
+            # visited
             for (x,y) in visited:
                 ax.add_patch(plt.Rectangle((y-0.5,x-0.5),1,1,color="cyan",alpha=0.3))
-            # Draw path
+            # path
             if path:
                 for (x,y) in path:
                     ax.add_patch(plt.Rectangle((y-0.5,x-0.5),1,1,color="yellow",alpha=0.6))
